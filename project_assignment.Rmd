@@ -1,0 +1,111 @@
+---
+title: "Prediction Assignment Writeup"
+author: "GuÃfÆ'Ã,Â°finna KristinsdÃfÆ'Ã,Â³ttir"
+date: "23 July 2017"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+## Overview
+
+This is final project from Coursera'a course Practical Machine Learning, which is a part of the Specialization in Data Science. This project is a peer assessment and was built in RStudio, using Knitr and Markdown language published in html format. I will try to predict the manner in which six participants performed some exercises. The machine learning algorithm will be applied to the 20 test cases available in the test data and the predictions are then submitted in appropriate format to the Course Project Prediction Quiz for automated grading.
+
+## Background 
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+##Environment Setup
+
+```{r setup}
+library(knitr)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(randomForest)
+library(corrplot)
+library(e1071)
+library(C50)
+set.seed(3007)
+```
+
+## Loading and Data Cleaning
+
+The data for this project come from this [source](http://groupware.les.inf.puc-rio.br/har)
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+```{r}
+if (!file.exists("pml-training.csv")) {
+        download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile = "pml-training.csv")
+}
+```
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+```{r}
+if (!file.exists("./pml-testing.csv")) {
+        download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile = "./pml-testing.csv")
+}
+```
+
+Then the data will be processed into train and datasets:
+```{r}
+pmlTrain<-read.csv("pml-training.csv", header=T, na.strings=c("NA", "#DIV/0!"))
+pmlTest<-read.csv("pml-testing.csv", header=T, na.string=c("NA", "#DIV/0!"))
+dim(pmlTrain)
+```
+
+Traning data will be partitioned and preprocessed so all variables with at least one "NA" were excluded from the analysis.
+
+```{r}
+noNAtrainset <- pmlTrain[, apply(pmlTrain, 2, function(x) !any(is.na(x)))] 
+dim(noNAtrainset)
+
+## Remove variables with user information, time and undefined
+cleanpmlTrain<-noNAtrainset[,-c(1:8)]
+dim(cleanpmlTrain)
+
+## 20 test cases provided clean info - Validation data set
+cleanpmltest<-pmlTest[,names(cleanpmlTrain[,-52])]
+dim(cleanpmltest)
+```
+Now we need to subset the training data into Train and Test data. I decided to part the training data into 70% Train and 30% Test.
+```{r}
+inTrain<-createDataPartition(y=cleanpmlTrain$classe, p=0.70,list=F)
+training<-cleanpmlTrain[inTrain,] 
+test<-cleanpmlTrain[-inTrain,]
+dim(training)
+```
+
+## Data Prediction and Modelling
+
+I will be using Random Forest for a prediction model
+
+```{r}
+fit_control <- trainControl(method="cv", 5,allowParallel=T, verbose=T)
+RandomForest <- train(classe ~ ., data=training, method="rf", trControl=fit_control, verbose=F)
+RandomForest
+```
+
+Then I estimate the performance of the model build. Getting the accuracy and the out-of-sample error right.
+
+```{r}
+predict_RandomForest <- predict(RandomForest, test)
+confusionMatrix(predict_RandomForest, test$classe)
+
+accuracy <- postResample(predict_RandomForest, test$classe)
+accuracy
+error<-1 - as.numeric(confusionMatrix(test$classe, predict_RandomForest)$overall[1])
+error
+```
+
+The accuracy is 99,3% and error is 0.006% on the modle. Which might suggest I over-fitted since the results are really good. But now it's time to predict results on the test data provided in the link.
+
+```{r}
+predict20<-predict(RandomForest, newdata=cleanpmltest)
+predict20
+```
